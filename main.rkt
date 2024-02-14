@@ -10,7 +10,7 @@
 (struct ErrC ([v : Any]) #:transparent)
 (struct CondC ([if : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
 (struct AnonC ([args : (Listof Symbol)] [body : ExprC]) #:transparent)
-(struct AppC    ([fun : IdC] [e1 : ExprC] [e2 : ExprC]) #:transparent)
+(struct AppC    ([fun : Symbol] [e1 : ExprC] [e2 : ExprC]) #:transparent)
 
 
 ;IS-ALLOWED?
@@ -33,7 +33,7 @@
     ['/ #t]
     ['<= #t]
     ['equal? #t]
-    [else (error 'parse "function not availible in OAZO5")]))
+    [else #f]))
 
 (define (parse [s : Sexp]) : ExprC
   (match s
@@ -47,7 +47,7 @@
     [(list 'anon (list (? symbol? (? is-allowed? args)) ...) ': body) (AnonC (cast args (Listof Symbol)) (parse body))] ;function definition
     #;[(list exprs +) (for/list ([item : (in-list exprs)]
                                  (parse item)))]
-    [(list (? symbol? (? is-primop? name)) l r) (AppC (IdC name) (parse l) (parse r))] ;embedded function
+    [(list (? symbol? (? is-primop? name)) l r) (AppC name (parse l) (parse r))] ;embedded function
     [other (error 'parse "OAZO5 syntax error in ~e" other)])) ;syntax error
 
 (check-equal? (parse 0) (NumC 0))
@@ -56,8 +56,11 @@
 (check-equal? (parse 'p) (IdC 'p))
 (check-equal? (parse "OAZO5") (WordC "OAZO5"))
 (check-equal? (parse '{error "invalid"}) (ErrC "invalid"))
-(check-equal? (parse '{if {<= x 5} then 5 else 6}) (CondC (AppC (IdC '+) (IdC 'x) (NumC 5)) (NumC 5) (NumC 6)))
+(check-equal? (parse '{if {<= x 5} then 5 else 6}) (CondC (AppC '<= (IdC 'x) (NumC 5)) (NumC 5) (NumC 6)))
 (check-equal? (parse '{anon {x} : 5}) (AnonC (list 'x) (NumC 5)))
+(check-equal? (parse '{/ {* {- {+ x 10} 10} 10} 10})
+              (AppC '/ (AppC '* (AppC '- (AppC '+ (IdC 'x) (NumC 10)) (NumC 10)) (NumC 10)) (NumC 10)))
+(check-equal? (parse '{equal? 1 2}) (AppC 'equal? (NumC 1) (NumC 2)))
 (check-exn #rx"syntax" (lambda () (parse '{not valid})))
 (check-exn #rx"keyword" (lambda () (parse 'if)))
 (check-exn #rx"keyword" (lambda () (parse 'let)))
