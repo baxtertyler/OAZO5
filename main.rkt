@@ -45,7 +45,7 @@
     [(list 'error v) (ErrC v)] ;error
     [(list 'if i 'then t 'else e) (CondC (parse i) (parse t) (parse e))] ;if statement
     [(list 'anon (list (? symbol? (? is-allowed? args)) ...) ': body) (AnonC (cast args (Listof Symbol)) (parse body))] ;function definition
-    #;[(list 'let (list (? symbol? (? is-allowed? var)) '<- (? real? val)) ... ': body) ???] ;let (sugar anon)
+    #;[(list 'let (list (? symbol? (? is-allowed? var)) '<- val) ... ': body) ???] ;let (sugar anon)
     #;[(list exprs +) (for/list ([item (in-list exprs)]) 
                         (parse item))] ;highest level function
     [(list (? symbol? (? is-primop? name)) l r) (AppC name (parse l) (parse r))] ;embedded function
