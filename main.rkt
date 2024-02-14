@@ -38,15 +38,15 @@
 (define (parse [s : Sexp]) : ExprC
   (match s
     [(? real? num) (NumC num)] ;number
-    ['true (BoolV #t)]
-    ['false (BoolV #f)]
+    ['true (BoolV #t)] ;true value
+    ['false (BoolV #f)] ;false value
     [(? symbol? (? is-allowed? sym)) (IdC sym)] ;id
     [(? string? str) (WordC str)] ;string
-    [(list 'error v) (ErrC v)]
+    [(list 'error v) (ErrC v)] ;error
     [(list 'if i 'then t 'else e) (CondC (parse i) (parse t) (parse e))] ;if statement
     [(list 'anon (list (? symbol? (? is-allowed? args)) ...) ': body) (AnonC (cast args (Listof Symbol)) (parse body))] ;function definition
-    #;[(list exprs +) (for/list ([item : (in-list exprs)]
-                                 (parse item)))]
+    #;[(list exprs +) (for/list ([item (in-list exprs)]) 
+                                   (parse item))] ;highest level function
     [(list (? symbol? (? is-primop? name)) l r) (AppC name (parse l) (parse r))] ;embedded function
     [other (error 'parse "OAZO5 syntax error in ~e" other)])) ;syntax error
 
