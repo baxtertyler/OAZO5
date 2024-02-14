@@ -2,15 +2,15 @@
 (require typed/rackunit)
 
 
-(define-type ExprC (U NumC IdC WordC CondC AnonC BoolV ErrC AppC))
+(define-type ExprC (U NumC IdC WordC BoolV ErrC CondC AppC AnonC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([id : Symbol]) #:transparent)
 (struct WordC ([str : String]) #:transparent)
 (struct BoolV ([b : Boolean]) #:transparent)
 (struct ErrC ([v : Any]) #:transparent)
 (struct CondC ([if : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
-(struct AnonC ([args : (Listof Symbol)] [body : ExprC]) #:transparent)
 (struct AppC    ([fun : Symbol] [e1 : ExprC] [e2 : ExprC]) #:transparent)
+(struct AnonC ([args : (Listof Symbol)] [body : ExprC]) #:transparent)
 
 
 ;IS-ALLOWED?
@@ -45,8 +45,9 @@
     [(list 'error v) (ErrC v)] ;error
     [(list 'if i 'then t 'else e) (CondC (parse i) (parse t) (parse e))] ;if statement
     [(list 'anon (list (? symbol? (? is-allowed? args)) ...) ': body) (AnonC (cast args (Listof Symbol)) (parse body))] ;function definition
+    #;[(list 'let (list (? symbol? (? is-allowed? var)) '<- (? symbol? (? is-allowed? val))) ... ': body) ???] ;let (sugar anon)
     #;[(list exprs +) (for/list ([item (in-list exprs)]) 
-                                   (parse item))] ;highest level function
+                        (parse item))] ;highest level function
     [(list (? symbol? (? is-primop? name)) l r) (AppC name (parse l) (parse r))] ;embedded function
     [other (error 'parse "OAZO5 syntax error in ~e" other)])) ;syntax error
 
@@ -62,13 +63,11 @@
               (AppC '/ (AppC '* (AppC '- (AppC '+ (IdC 'x) (NumC 10)) (NumC 10)) (NumC 10)) (NumC 10)))
 (check-equal? (parse '{equal? 1 2}) (AppC 'equal? (NumC 1) (NumC 2)))
 (check-exn #rx"syntax" (lambda () (parse '{not valid})))
-(check-exn #rx"keyword" (lambda () (parse 'if)))
-(check-exn #rx"keyword" (lambda () (parse 'let)))
-(check-exn #rx"keyword" (lambda () (parse 'anon)))
-(check-exn #rx"keyword" (lambda () (parse ':)))
-(check-exn #rx"keyword" (lambda () (parse '<-)))
-
-
+(check-exn #rx"keyword" (lambda () (parse '{anon {if} : 5})))
+(check-exn #rx"keyword" (lambda () (parse '{anon {let} : 5})))
+(check-exn #rx"keyword" (lambda () (parse '{anon {anon} : 5})))
+(check-exn #rx"keyword" (lambda () (parse '{anon {:} : 5})))
+(check-exn #rx"keyword" (lambda () (parse '{anon {<-} : 5})))
 
 
 
