@@ -2,12 +2,16 @@
 (require typed/rackunit)
 
 
-(define-type ExprC (U NumC IdC WordC CondC AnonC))
+(define-type ExprC (U NumC IdC WordC CondC AnonC BoolV ErrC AppC))
 (struct NumC ([n : Real]) #:transparent)
 (struct IdC ([id : Symbol]) #:transparent)
 (struct WordC ([str : String]) #:transparent)
+(struct BoolV ([b : Boolean]) #:transparent)
+(struct ErrC ([v : Any]) #:transparent)
 (struct CondC ([if : ExprC] [then : ExprC] [else : ExprC]) #:transparent)
 (struct AnonC ([args : (Listof Symbol)] [body : ExprC]) #:transparent)
+(struct AppC    ([fun : IdC] [e1 : ExprC] [e2 : ExprC]) #:transparent)
+
 
 ;IS-ALLOWED?
 ;takes in a symbol
@@ -21,21 +25,38 @@
     ['<- (error 'parse "<- is a keyword")]
     [else #t]))
 
-
+(define (is-primop? [s : Symbol]) : Boolean
+  (match s
+    ['+ #t]
+    ['- #t]
+    ['* #t]
+    ['/ #t]
+    ['<= #t]
+    ['equal? #t]
+    [else (error 'parse "function not availible in OAZO5")]))
 
 (define (parse [s : Sexp]) : ExprC
   (match s
-    [(? real? num) (NumC num)]
-    [(? symbol? (? is-allowed? sym)) (IdC sym)]
-    [(? string? str) (WordC str)]
-    #;[(list 'if i 'then t 'else e) (CondC (parse i) (parse t) (parse e))]
-    [(list 'anon (list (? symbol? (? is-allowed? args)) ...) ': body) (AnonC (cast args (Listof Symbol)) (parse body))]
-    #;multiple-exprc
-    [other (error 'parse "OAZO5 syntax error in ~e" other)]))
+    [(? real? num) (NumC num)] ;number
+    ['true (BoolV #t)]
+    ['false (BoolV #f)]
+    [(? symbol? (? is-allowed? sym)) (IdC sym)] ;id
+    [(? string? str) (WordC str)] ;string
+    [(list 'error v) (ErrC v)]
+    [(list 'if i 'then t 'else e) (CondC (parse i) (parse t) (parse e))] ;if statement
+    [(list 'anon (list (? symbol? (? is-allowed? args)) ...) ': body) (AnonC (cast args (Listof Symbol)) (parse body))] ;function definition
+    #;[(list exprs +) (for/list ([item : (in-list exprs)]
+                                 (parse item)))]
+    [(list (? symbol? (? is-primop? name)) l r) (AppC (IdC name) (parse l) (parse r))] ;embedded function
+    [other (error 'parse "OAZO5 syntax error in ~e" other)])) ;syntax error
 
 (check-equal? (parse 0) (NumC 0))
+(check-equal? (parse 'true) (BoolV #t))
+(check-equal? (parse 'false) (BoolV #f))
 (check-equal? (parse 'p) (IdC 'p))
 (check-equal? (parse "OAZO5") (WordC "OAZO5"))
+(check-equal? (parse '{error "invalid"}) (ErrC "invalid"))
+(check-equal? (parse '{if {<= x 5} then 5 else 6}) (CondC (AppC (IdC '+) (IdC 'x) (NumC 5)) (NumC 5) (NumC 6)))
 (check-equal? (parse '{anon {x} : 5}) (AnonC (list 'x) (NumC 5)))
 (check-exn #rx"syntax" (lambda () (parse '{not valid})))
 (check-exn #rx"keyword" (lambda () (parse 'if)))
