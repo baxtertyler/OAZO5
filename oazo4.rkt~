@@ -13,24 +13,6 @@
 (struct FundefC ([name : Symbol] [arg : (Listof Symbol)] [body : ExprC]) #:transparent)
 
 
-(struct Binding ([name : Symbol] [val : Real])) 
-(define-type Env (Listof Binding))
-(define mt-env '())
-(define extend-env cons)
-
-
-(define (lookup [for : Symbol] [env : Env]) : Real
-  (match env
-    ['() (error 'lookup "name not found: ~e" for)]
-    [(cons (Binding name val) r) (cond
-                                   [(symbol=? for name) val]
-                                   [else (lookup for r)])]))
-
-
-
-
-
-
 
 ;TOP-INTERP
 ;in: list of oazo3 syntax functions fun-sexps
@@ -45,7 +27,7 @@
 ;in: list of FundefC funcs
 ;out: evaluation of funtions as a Real
 (define (interp-fns [funs : (Listof FundefC)]) : Real
-  (interp (FundefC-body (get-fundef 'main funs 0)) mt-env funs))
+  (interp (FundefC-body (get-fundef 'main funs 0)) funs))
 
 
 
@@ -63,37 +45,64 @@
 
 
 
+
 ;INTERP
 ;in: ExprC exp, list of FundefC lst
 ;out: evaluation of exp as a Real
-(define (interp [exp : ExprC] [env : Env] [funs : (Listof FundefC)]) : Real
+(define (interp [exp : ExprC] [funs : (Listof FundefC)]) : Real
   (match exp
     [(NumC n) n]
-    [(IdC id) (lookup id env)]
-    [(BinopC '+ l r) (+ (interp l env funs) (interp r env funs))]
-    [(BinopC '- l r)  (- (interp l env funs) (interp r env funs))]
-    [(BinopC '* l r) (* (interp l env funs) (interp r env funs))]
-    [(BinopC '/ l r)  (cond [(not (eq? (interp r env funs) 0)) (/ (interp l env funs) (interp r env funs))]
+    [(BinopC '+ l r) (+ (interp l funs) (interp r funs))]
+    [(BinopC '- l r)  (- (interp l funs) (interp r funs))]
+    [(BinopC '* l r) (* (interp l funs) (interp r funs))]
+    [(BinopC '/ l r)  (cond [(not (eq? (interp r funs) 0)) (/ (interp l funs) (interp r funs))]
                             [else (error 'interp "OAZO4 div by 0")])] 
-    [(Ifleq0C c y n) (cond [(<= (interp c env funs) 0) (interp y env funs)]
-                           [else (interp n env funs)])]
+    [(Ifleq0C c y n) (cond [(<= (interp c funs) 0) (interp y funs)]
+                           [else (interp n funs)])]
 
     [(AppC name args) (define fd (get-fundef name funs (length args)))
-                      (interp (FundefC-body fd)
-                              (extend args (FundefC-arg fd) env)
+                      (interp (subst-multi
+                               (for/list ([item (in-list args)])
+                                 (NumC (interp item funs)))
+                               (FundefC-arg fd)
+                               (FundefC-body fd)) 
                               funs)]
-   ))
-
-(define (extend [arg : (Listof ExprC)] [param : (Listof Symbol)] [env : Env]) : Env
-  (match arg
-    ['() env]
-    [a (extend (rest arg) (rest param) (extend-env (Binding (first param) (interp (first arg) env '())) env))]))
+    [(IdC _) (error 'interp "OAZO4 wrong arity")])) 
 
 
-#;(extend-env (Binding (FundefC-arg fd)
-                       (for/list ([item (in-list args)])
-                         (NumC (interp item env funs))))
-              env)
+
+;SUBST-MULTI
+;in: list of ExprC what, list of Symbol for, and ExprC in
+;out: 
+(define (subst-multi [what : (Listof ExprC)] [for : (Listof Symbol)] [in : ExprC]) : ExprC
+  (match what
+    ['() in]
+    [(cons f r) (subst-multi r (rest for) (subst f (first for) in))]))
+
+
+
+;SUBST
+;in: ExprC what, Symbol for, and ExprC in
+;out: 
+(define (subst [what : ExprC] [for : Symbol] [in : ExprC]) : ExprC
+  (match in
+    [(NumC n) in]
+    [(IdC s) (cond
+               [(symbol=? s for) what]
+               [else in])]
+    [(AppC name args) (AppC name (for/list ([item (in-list args)])
+                                   (subst what for item)))]
+    [(BinopC '+ l r) (BinopC '+ (subst what for l)
+                             (subst what for r))]
+    [(BinopC '* l r) (BinopC '* (subst what for l)
+                             (subst what for r))]
+    [(BinopC '- l r) (BinopC '- (subst what for l)
+                             (subst what for r))]
+    [(BinopC '/ l r) (BinopC '/ (subst what for l)
+                             (subst what for r))]
+    [(Ifleq0C c y n) (Ifleq0C (subst what for c) (subst what for y)
+                              (subst what for n))]))
+
 
 
 ;PARSE-PROG
@@ -150,7 +159,6 @@
     [': #f]
     [else #t]))
 
-#|
 
 ;TESTS 
 ;; parse
@@ -224,6 +232,3 @@
 (check-equal? (subst (NumC 0) 'x (AppC 'f (list (IdC 'x) (NumC 4)))) (AppC 'f (list (NumC 0) (NumC 4))))
 (check-equal? (subst (NumC 0) 'x (Ifleq0C (IdC 'x) (NumC 5) (NumC 6))) (Ifleq0C (NumC 0) (NumC 5) (NumC 6)))
 
-|#
-(check-equal? (top-interp '{{func {f x y} : {+ x y}}
-                            {func {main} : {f 1 2}}}) 3)
